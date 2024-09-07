@@ -684,7 +684,7 @@ def linear_combiner(id, list_of_resolutions):
             intercept_check = linear_intersector(temp_line, vector_function)
         
             if intercept_check is not None and intercept_check[1] > 1:
-                is_valid_point = False  # Found an invalid intersection, break out of the loop
+                is_valid_point = False 
                 break
     
         if is_valid_point:
