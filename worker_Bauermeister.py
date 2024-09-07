@@ -7,7 +7,20 @@ import sympy as sp
 import math
 
 def add_or_update_puck(puck, pucks):
-    
+    """
+    Fügt einen neuen Puck zum 'pucks'-Dictionary hinzu oder aktualisiert einen bestehenden.
+
+    Im Dictionary, das alle Puck-Daten speichert, indiziert durch die Puck-ID.
+
+    Die Routine führt folgende Schritte durch:
+    1. Ruft die ID des Pucks ab.
+    2. Prüft, ob der Puck aktiv ist (außer es handelt dem eigenen ) oder ob der Puck None ist:
+       - Falls ja, wird der Puck aus dem 'pucks'-Dictionary gelöscht.
+    3. Erstellt ein Dictionary 'updated_data' mit den aktuellen Eigenschaften des Pucks.
+    4. Falls der Puck bereits im 'pucks'-Dictionary vorhanden ist, wird der Eintrag des Pucks mit 'updated_data' aktualisiert.
+    5. Falls der Puck noch nicht im Dictionary vorhanden ist, wird ein neuer Eintrag mit 'updated_data' erstellt
+       und zusätzliche Felder wie 'proximity_traffic', 'tca' und 'Dtca' werden initialisiert.
+    """
     puck_id = puck.get_id()
  
     if not puck.is_alive() and puck_id != worker_Bauermeister.id or puck is None:
@@ -46,6 +59,19 @@ def print_pucks(pucks):
 
        
 def mirror(vector, mirror_at):
+    """
+    Spiegelt einen gegebenen Vektor an einer Spielfeldwand.
+
+    Args:
+        vector (numpy.ndarray)
+        mirror_at (str): String, der die Achse angibt, an der der Vektor gespiegelt werden soll.
+                        
+    Returns:
+        numpy.ndarray: Der gespiegelte Vektor als NumPy-Array. Gibt None zurück, wenn der Eingabevektor None ist
+                       oder der Wert für mirror_at ungültig ist.
+    Raises:
+        ValueError: Wenn ein ungültiger Wert für mirror_at angegeben wird.
+    """
     if vector is None:
        return None
     mirrored_vector = None
@@ -64,6 +90,21 @@ def mirror(vector, mirror_at):
     return mirrored_vector
 
 def mirror_of_function(vector_function, mirror_at):
+    """
+
+    Ähnlich wie bei der `mirror`-Funktion, diesmal aber für eine Vektor-Funktion.
+    Args:
+        vector_function (tuple):- position (numpy.ndarray): Der "Startpunk"t des Vektors ( bzw Verschiebungsvektor)
+                                 - direction (numpy.ndarray): Die "Richtung" ist der relevante vektor für Schnittpunkte o.ä. siehe unten
+        mirror_at (str): String
+
+    Returns:
+        tuple: - mirrored_position (numpy.ndarray): Der gespiegelte Startpunkt.
+               - mirrored_direction (numpy.ndarray): Die gespiegelte Richtung.
+               Gibt None zurück, wenn die Eingabevektor-Funktion None ist oder ungültige Werte enthält.
+    Raises:
+        ValueError: Wenn ein ungültiger Wert für mirror_at angegeben wird.
+    """
     if vector_function is None:
         return None
     
@@ -82,7 +123,17 @@ def mirror_of_function(vector_function, mirror_at):
 
     return (mirrored_position, mirrored_direction)
 
-def create_mirror_pucks( pucks):
+def create_mirror_pucks(pucks):
+    """
+    Für jede Spiegelrichtung ('x_min', 'x_max', 'y_min', 'y_max') wird ein neuer gespiegelter Puck erstellt
+    und zu `worker_Bauermeister.mirror_Pucks` hinzugefügt.
+
+    Args:
+        pucks (dict): Ein Dictionary mit allen vorhandenen Pucks, einschließlich des eigenen Pucks.
+
+    Returns:
+        dict: Ein "geupdatetes" Dictionary mit den gespiegelten Pucks.
+    """
     mirror_directions = {
         'x_min': 100,
         'y_max': 101,
@@ -115,6 +166,34 @@ def create_mirror_pucks( pucks):
     return worker_Bauermeister.mirror_Pucks
 
 def is_proximity(puck_id, own_id, pucks):
+    """
+    Bestimmt, ob ein gegebener Puck (puck_id) für einen eigenen Puck (own_id) eine potenzielle Gefahr darstellt.
+
+    Analog zur Lösung in der Vorlesung berechnet diese routine die "time to closest approach" (TCA) und den minimalen Abstand (Dtca) zwischen zwei Pucks.
+    Basierend auf diesen Werten wird beurteilt, ob der betrachtete Puck eine Gefahr für den eigenen Puck darstellt und 
+    entsprechende bool-Markierungen im Dictionary gesetzt.
+
+    Args:
+        puck_id (int): Die ID des zu überprüfenden Pucks.
+        own_id (int): Die ID des eigenen Pucks.
+        pucks (dict)
+
+    Ablauf:
+    - Berechnung der relativen Position und Geschwindigkeit zwischen dem eigenen Puck und dem zu prüfenden Puck.
+    - Bestimmung tca und Dtca und aus diesen Werten auch die "quick solution", ein einzelner Vektor
+    - Spezielle Fälle (`own_id` von 100 bis 103) für die gespiegelten OUcks werden seperat gehandhabt
+    - dafür wird für einen gespiegelten Puck tca und Dtca überprüft und ggf der Puck als proximity traffic markiert, mit der jeweiligen Spiegelachse.
+    - die jeweilige reflektions Flag z.b. "left_danger" wird dann für die spätere Verarbeitung auf "True" gesetzt
+    - Pucks die "out of Fuel" sind werden früher als proximity traffic getagged, da diese sich nurnoch geradlinig bewegen kann so schon frühzeitig eine Treibstoffsparende Lösung gefunden werden.
+    - Wenn eine Gefahr festgestellt wird, wird eine schnelle Lösung zur Vermeidung in eine Liste von schnellen Lösungen eingefügt.
+
+    Exceptions:
+        ZeroDivisionError: Tritt auf, wenn die Geschwindigkeit beider Pucks gleich ist (Division durch null). In diesem Fall wird der Puck als ungefährlich markiert.
+
+    Returns:
+        None: Diese Funktion aktualisiert das `pucks`-Dictionary und die internen Zustände des `worker_Bauermeister`-Objekts.
+    """
+
     #print("PROXY CALLED für id:", puck_id, "range", worker_Bauermeister.range, "time", worker_Bauermeister.timeframe)
     
     if puck_id == own_id or puck_id == worker_Bauermeister.id:
@@ -155,8 +234,8 @@ def is_proximity(puck_id, own_id, pucks):
         if tca is not None and scalar_Dtca is not None :
             #print(f" Puck {puck_id} wird gecheckt, tca: {tca}, DTCA {Dtca}")
             timeframe = worker_Bauermeister.timeframe
-            #fuel = pucks[puck_id]['fuel']
-            adjusted_timeframe = timeframe #+ 0.5 if fuel <= 0 else timeframe
+            fuel = pucks[puck_id]['fuel']
+            adjusted_timeframe = timeframe + 0.5 if fuel <= 0 else timeframe
             proximity_condition = (tca <= adjusted_timeframe and scalar_Dtca <= worker_Bauermeister.range) 
             #print("PROXY CONDITION IS:", proximity_condition)
             quick_solution = None
@@ -230,6 +309,17 @@ def is_proximity(puck_id, own_id, pucks):
 
 
 def V_MIN_template():
+    """
+    Erstellt eine Schablone der "stall regions" an der im V Min limiter die Vektorfunktionen beschnitten werden.
+
+    Es hanbdelt sich dabei um zwei mögliche Barrieren basierend auf der Nähe der eigenen Geschwindigkeit zur V min. (abzüglich einer Safety margin)
+    Wenn die Geschwindigkeit klein ist, werden die Barrieren nahe am Startpunkt erzeugt um auch kleine Korrekturen in richtung vmin zuzulassen.
+    Bei größerer Geschwindigkeit werden die Barrieren weiter entfernt und angewinkelt erzeugt ( siehe Skizze im Protokoll), um nicht einen zu großen Azimuth zu beschränken.
+    
+    Returns:
+        None: Die Barrieren werden in einer Attributvariable des `worker_Bauermeister`-Objekts gespeichert.
+    """
+
 
     r = worker_Bauermeister.V_MIN+ worker_Bauermeister.safety_margin
     velocity = worker_Bauermeister.Pucks[worker_Bauermeister.id]['velocity']
@@ -260,6 +350,20 @@ def V_MIN_template():
        
 
 def V_MIN_limiter(vector_function, target_list):
+    """
+    Begrenzung der Vektor-Funktion anhand der V_MIN-template bzw der barrier-functions.
+
+    Die Funktion beschneidet die Vektorfunktion entsprechend und die resultierenden Teile werden zu einer Liste 
+    hinzugefügt. ( da aus einer Vektorfunktion hier auch zwei werden können). 
+    
+    Args:
+        vector_function (tuple)
+        target_list (list): Die Liste, in die die beschnittenen Teile der Vektor-Funktion eingefügt werden.
+
+    Returns:
+        None: Die begrenzten Teile werden der `target_list`angehängt.
+    """
+
     #print(f"V_MIN limiter input: {vector_function}")
     if vector_function is None or worker_Bauermeister.barriers is None:
         #print("vmin limiter return none")
@@ -325,6 +429,19 @@ def V_MIN_limiter(vector_function, target_list):
     #print("result min limiter:", target_list)
            
 def A_MAX_limiter(relative_velocity, A):
+    """
+    
+    Berechnet die (Zeit-) Punkte an denen frühestmöglich die Schar der Lösungsvektoren mit 
+    maximaler Beschleunigung üerreicht werden kann. Gibt die neue begrenzte Vektor-Funktion zurück, falls 
+    sie ereichbar ist, sonst None.Berechnung siehe Protokoll.
+
+    Args:
+        Vektorfunktion( tuple)
+
+    Returns:
+        tuple or None: Vektorfunktion mit "erreichbaren" Lösungen
+    """
+
     if A is None or relative_velocity is None:
         return None
     a_max = worker_Bauermeister.A_MAX
@@ -337,12 +454,12 @@ def A_MAX_limiter(relative_velocity, A):
     
    
     coeff_t6 = 0.25 * a_max**2 
-    coeff_t4 = -norm_V**2  
+    coeff_t2 = -norm_V**2  
     coeff_t1 = -2 * A_dot_V 
     coeff_t0 = -norm_A**2 
 
     
-    coefficients = [coeff_t6, 0, coeff_t4, 0, 0, coeff_t1, coeff_t0]
+    coefficients = [coeff_t6, 0, 0, 0, coeff_t2, coeff_t1, coeff_t0]
     
     roots = np.roots(coefficients)
     
@@ -362,6 +479,15 @@ def A_MAX_limiter(relative_velocity, A):
     
 
 def V_MAX_limiter(vector_function):
+    """
+    Beschneidet einen Vektor, wenn er das maximale Geschwindigkeitslimit (V_MAX) überschreitet. 
+    Je nachdem ob der Schnittpunkt von außen oder innen erreicht wird ( outside condition) wird der ensprechende Funktionsteil zurückgegeben.
+    Args:
+        vector_function (tuple)
+
+    Returns:
+        vector_function or None (falls die Funktion komplett außerhalb liegt)
+    """
     
     #print("V_MAX LIMITER input:", vector_function)
     
@@ -395,6 +521,19 @@ def V_MAX_limiter(vector_function):
         return vector_function 
     
 def minimum_resolution_function(relative_velocity, A, target_list):
+    """
+    Hier wird die Vektorfunktion erzeugt (siehe Protokoll) und nacheinander durch alle Limiter überprüft. 
+    Ist die Funktion komplett unnereichbar, überschreitet v_max oder v_min im kompletten bereich wird None zurückgegeben.
+
+    Args:
+        relative_velocity (numpy.array) ("startpunkt der Funktion")
+        A (numpy.array) ("Funktionsvektor, verschoben um relative_velocity")
+        target_list (list): Die Liste, in der die resultierenden gültigen Vektor-Funktionen gespeichert werden.
+
+    Returns:
+        None: Das Ergebnis wird direkt in die `target_list` eingetragen. Gibt None zurück, wenn keine gültige
+              Funktion gefunden wird.
+    """
     #print("res function vor Limiter:", relative_velocity,A)
     A_MAX_checked = A_MAX_limiter(relative_velocity, A)
     if A_MAX_checked is not None:
@@ -413,15 +552,55 @@ def minimum_resolution_function(relative_velocity, A, target_list):
         
     
     
-def min_limitation_function(relative_velocity,A):
+def min_limitation_function(relative_velocity, A):
+    """
+    Erstellt die eine mini limitation funktion. Der einfachheit halber werden diese Lösungen in der Version nicht durch die Limiter gecheckt,
+    da davon auszugehen ist, dass die Lösung die in der secondary_collsion_protection erzeugt wird ein relativ langer Vektor ist, 
+    und somit eher in brenzlichen Situationen zum tragen kommt, nämlich wenn zum Lösen eines Konfliktes ein anderer Puck gekreuzt werden muss.
+
+    Args:
+        relative_velocity (numpy.array)
+        A (numpy.array)
+
+    Returns:
+        tuple
+    """
     return relative_velocity, A
-    
 
 def max_limitation_function(relative_velocity, A, B):
+    """
+    Erstellt eine max limitation funktion. Hierbei wird der hintere Eckpunkt an der dem eigenen Puck zugewanden Seite angepeilt ( Siehe Skizze im Protokoll).
+    Dabei war die annahme, dass der Puck sich (dank der proximity-Klassifizierung mit positiver tca) auf einem tangentialen Pfad nähert.
+
+    Args:
+        relative_velocity (numpy.array)
+        A (numpy.array)
+        B (numpy.array): Vektor um den "Peilpunkt" auf die hintere Ecke zu verschieben
+
+    Returns:
+        zwei Listen: resolution_vector_functions oder limitation_tuples. Diese können auch leer sein.
+    """
     return relative_velocity, A - (2 * B)
     
 
 def conflict_resolutions_and_limitations(own_puck, pucks):
+    """
+    Diese zentrale Routine bestimmt Konfliktlösungen basierend auf der relativen Position und Geschwindigkeit.
+    Es wird mit dem alpha_criterion geprüft ob der eigene Puck innerhalb des tracks der Eckigen Schutzzone liegt, oder nicht. 
+    Da ich dennoch gelegentlich Kollisionen beobachtet habe, die eigentlich nicht passieren dürften, habe ich zusätzlich das 
+    avoidance_required -Kriterum erstellt um unabhängig vom alpha_criterion bei allen Pucks die sich bis auf weniger als zwei Längeneinehiten 
+    annähern ebenfalls ein Manöver zu starten. In dem Fall werden "resolutions" erzeugt, denen gefolgt werden muss. 
+    Anderenfalls werden "limitation_tuples" erzeugt, bestehend aus einer Max- und einer Minifunktion, die lediglich für den Schutz vor sekundären kollisionen bestimmt sind.
+    Anders als bei den ersten Versionen finden sich hier noch große Parameter bzw Funktionen wie der "safety_squish" die deutlich drastischere Reaktionen hervorrufen sollen.
+
+    Args:
+        own_puck (dict)
+        pucks (dict)
+
+    Returns:
+        tuple: Eine Liste von Vektor-Funktionen für Konfliktvermeidung (resolution_vector_functions) und eine Liste 
+        von Einschränkungen (limitation_tuples), die angewendet werden müssen.
+    """
     
     resolution_vector_functions = []
  
@@ -437,7 +616,7 @@ def conflict_resolutions_and_limitations(own_puck, pucks):
         #print("rel Pos", relative_position)
         len_rel_pos = np.linalg.norm(relative_position)
         safety_squish = 3/(-2*len_rel_pos)+1
-        relative_position = relative_position*safety_squish
+        relative_position = 0.8*relative_position*safety_squish
         
         
         relative_velocity = (intruder['velocity'] - own_puck['velocity'])
@@ -453,7 +632,7 @@ def conflict_resolutions_and_limitations(own_puck, pucks):
         
         scalar_Dtca = intruder['scalar_Dtca'] 
         if scalar_Dtca is not None:
-            avoidance_required = (scalar_Dtca<3)
+            avoidance_required = (scalar_Dtca<4)
         else:
             avoidance_required = False
             
@@ -522,6 +701,22 @@ def conflict_resolutions_and_limitations(own_puck, pucks):
 
 
 def linear_intersector(vector_function1, vector_function2):
+    """
+    Diese Routine bestimmt den Schnittpunkt zweier Vektor-Funktionen ( falls er existiert)
+    
+    Jeder Vektor wird durch einen Startpunkt und eine Richtung beschrieben. Die Routine berechnet, 
+    ob und wo sich diese beiden Vektoren oder Strahlen schneiden. Wenn die Strahlen parallel oder sich aufgrund der endlichen Länge nicht schneiden , 
+    wird `None` zurückgegeben.
+
+    Args:
+        vector_function1 (tuple): bestehend aus einem Startpunkt (p1) und einer Richtung (d1).
+        vector_function2 (tuple): bestehend aus einem Startpunkt (p2) und einer Richtung (d2).
+
+    Returns:
+        tuple or None: Gibt den Schnittpunkt der beiden Strahlen als Tupel zurück (Schnittpunkt, t1, t2), 
+        wobei `t1` und `t2` die Parameter entlang der beiden Vektoren sind. Gibt `None` zurück, wenn 
+        keine Schnittstelle vorhanden ist oder die Strahlen parallel sind.
+    """
 #    print("INTERSECTOR CALLED")
 #    print(f"vector funct 1{vector_function1} und vector funct 2 {vector_function2}")
 
@@ -558,6 +753,16 @@ def linear_intersector(vector_function1, vector_function2):
 
 
 def circular_intersector_list(vector_function, radius):
+    """
+    Ähnlich wie der linear intersector, hier jedoch mit einem Kreis. Hauptsächlich genutzt für den V_MAX_limiter
+
+    Args:
+        vector_function
+        radius (float)
+
+    Returns:
+        list or None: Eine Liste von Schnittpunkten (Punkt, t) oder None, wenn kein Schnittpunkt vorhanden ist.
+    """
     
     if vector_function is None or radius is None:
         return None
@@ -599,6 +804,9 @@ def circular_intersector_list(vector_function, radius):
   
 
 def closest_approach(vector_function):
+    """
+    implementiert wie in der Vorlesung gezeigt
+    """
     if vector_function is None:
         return None
     p, d = vector_function[:2]
@@ -624,11 +832,24 @@ def closest_approach(vector_function):
    
 
 def sort_by_distance(list_of_points):
+    """
+    Entfernt Duplikate aus einer Liste von Punkten und sortiert die verbleibenden
+    Punkte basierend auf ihrem quadratischen Abstand zum Ursprung (0, 0).
+    
+    Args:
+    list_of_points (List[np.arrays])
+    
+    Returns:
+    list_of_points (List[np.arrays]) , aber ohne Duplikate und nach der Lönge sortiert
+    """
     unique_points = list(set(map(tuple, list_of_points)))
     sorted_points = sorted(unique_points, key=lambda point: point[0]**2 + point[1]**2)
     return [np.array(point) for point in sorted_points]
 
-def insert_into_sorted_by_distance(list_of_points, new_point):
+def insert_into_sorted_by_distance(list_of_points, new_point):#
+    """
+    Ordnet einen Punkt nach seiner Länge nach in eine Sortierte Liste ein, ohne die Reihenfolge zu stören
+    """
     new_point_distance = new_point[0]**2 + new_point[1]**2
     for i, point in enumerate(list_of_points):
         if new_point_distance < point[0]**2 + point[1]**2:
@@ -637,6 +858,19 @@ def insert_into_sorted_by_distance(list_of_points, new_point):
     list_of_points.append(new_point)
 
 def linear_combiner(id, list_of_resolutions):
+    """
+    Zentrale Routine, die eine Liste von Lösungsvektorfunktionen verarbeitet und die mögliochen Konfliktlösungspunkte (Schnittpunkte oder closest approach Points) 
+    identifiziert.Diese Punkte werden danach noch überprüft ob es auch wirkliche Minimumunkte sind, indem ihr Positionsvektor nach Schnittpunkten 
+    mit allen Mini-Funktioenen geprüft wird.
+
+    Args:
+        id 
+        list_of_resolutions (list of tuples)
+
+    Returns:
+        list: Eine sortierte Liste von gültigen Minipunkten (numpy-Arrays),falls keine gültigen Punkte gefunden werden, wird der 
+        Nullvektor zurückgegeben.
+    """
     #print("COMBINER CALLED")
 #    print("list of Resolutions:", list_of_resolutions)
     list_of_resolutions = [
@@ -684,7 +918,7 @@ def linear_combiner(id, list_of_resolutions):
             intercept_check = linear_intersector(temp_line, vector_function)
         
             if intercept_check is not None and intercept_check[1] > 1:
-                is_valid_point = False 
+                is_valid_point = False  
                 break
     
         if is_valid_point:
@@ -697,6 +931,25 @@ def linear_combiner(id, list_of_resolutions):
     return result
 
 def secondary_collision_protection(list_of_points, limitation_tuples):
+    """
+    Überprüft Lösungspunkte auf potenzielle sekundäre Kollisionen und passt sie bei Bedarf an.
+
+    Diese Funktion iteriert durch eine Liste von potenziellen Lösungspunkten (true_mini_points) und überprüft, 
+    ob einer dieser Punkte ( bzw Vektoren) zu einer Kollision mit einer Max-function führt. 
+    Ist das der Fall ist wird geprüft oder der Vektor lang genug ist um diese Kollsion direkt zu Lösen, falls nicht
+    wird der Punkt so verlängert, das er es tut und angehängt. An dieser Stelle ist garantiert, das dieser neue Punkt den Konflikt lösen könnte, allerdings
+    nicht ob es dafür zu einer A_MAX, V_MAX oder V_MIN überschreitung kommt. ( erklärung dazu siehe oben)
+    Andernfalls wird der Punkt zurückgegeben, wenn keine sekundäre Kollision  erkannt wird. Da die input Liste sortiert wird, kann so der kürzeste Vektor 
+    werden, der den Konflikt löst.
+
+    Args:
+        list_of_points (list of np.ndarray)
+        limitation_tuples (list of tuples)
+
+    Returns:
+        np.ndarray or None: Der Minipunkt, der keine Kollision verursacht, oder None, wenn alle Punkte 
+        potenzielle Kollisionen erzeugen.
+    """
     print("secondary coll check called, with input:", list_of_points)
 
     for point in list_of_points:
@@ -759,8 +1012,18 @@ def secondary_collision_protection(list_of_points, limitation_tuples):
 
 
            
-def quick_secondary_colision_protection(list_of_points, limitation_tuples):
-    
+def quick_secondary_collision_protection(list_of_points, limitation_tuples):
+    """
+    Schnelle Überprüfung auf sekundäre Kollisionen ohne Korrektur, für zeitkritische Szenarien.
+    Funtkionsweise ähnlich wie oben, nur das hier Punkte bei einer sekundären Kollision einfach ausgeschlossen werden, ohne Korrekturversuch
+
+    Args:
+        list_of_points (list of np.ndarray)
+        limitation_tuples (list of tuples)
+
+    Returns:
+        np.ndarray or None
+    """
     for point in list_of_points:
         if point is None:
             continue
@@ -779,6 +1042,20 @@ def quick_secondary_colision_protection(list_of_points, limitation_tuples):
 
 
 def adaptive_performance_control(runtime):
+    """
+    
+    Diese Funktion passt den "Horizont" des Pucks (d.h. den Zeitrahmen und den Erfassungsbereich) dynamisch an, 
+    um die Rechenzeit basierend auf der aktuellen Laufzeit zu optimieren. Wenn die Berechnungen zu lange dauern, 
+    wird der Horizont verkleinert, um die Leistung zu verbessern. Andernfalls werden sie erweitert, 
+    um besser ausweichen zu können. Der Horizont steuert auch ob bounces beachtet werden oder nicht.
+
+    Args:
+        runtime (float): Die Laufzeit der aktuellen Berechnung.
+    
+    Modifies:
+        worker_Bauermeister.timeframe (float) zeitlicher Horizont
+        worker_Bauermeister.range (float) räumlicher Horizont
+    """
 #    print("ADAPTIVE PERF RUNTIME", runtime)
     max_timeframe = 5
     min_timeframe = 1  
@@ -798,6 +1075,14 @@ def adaptive_performance_control(runtime):
    
  
 def moderator():
+    """
+    Diese Funktion wird in ruhigen Phasen aufgerufen, wenn der Treibstoffstand des Pucks 
+    hoch genug ist. Sie berechnet eine Korrektur der Geschwindigkeit, um den Puck in einem 
+    moderaten Geschwindigkeitsbereich zu halten.
+
+    Returns:
+        np.array: Der Geschwindigkeitskorrekturvektor, der angewendet werden soll.
+    """
     if worker_Bauermeister.Pucks[worker_Bauermeister.id]['fuel']>25:
         moderation_factor = 0.2
         own_velocity = worker_Bauermeister.Pucks[worker_Bauermeister.id]['velocity']
@@ -812,6 +1097,15 @@ def moderator():
     return command
 
 def Q_spamer_preparation():
+    """
+    Diese Funktion sucht nach dem Puck mit der größten Zeit bis zur nächsten Kollision (TCA) (die außerhalb meines 
+    zeitlichen Horizontes liegt und nicht "None" ist) und bereitet einen Vektor vor um den Puck unter v_min zu bringen
+    und zwar noch bevor er meinen Horizont erreichen kann. Wenn kein Puck gefunden wird, gibt die Funktion `None` zurück.
+
+    Returns:
+        tuple or None: Ein Tupel mit dem negierten Geschwindigkeitsvektor und der ID des Ziel-Pucks, 
+                       oder `None`, falls kein passender Puck gefunden wird.
+    """
     #print("Q SPAMER CALLED")
     pucks = worker_Bauermeister.Pucks
     max_tca = worker_Bauermeister.timeframe+0.5
@@ -826,7 +1120,7 @@ def Q_spamer_preparation():
             target_puck_id = puck_id
             target_velocity = puck_data.get('velocity')  
     if target_puck_id is not None:
-        return   -target_velocity, target_puck_id
+        return   -2*target_velocity, target_puck_id
     else:
         return None
    
@@ -836,11 +1130,14 @@ def Q_spamer_preparation():
 def worker_Bauermeister(id, secret, q_request, q_reply):
     while True:
         if not getattr(worker_Bauermeister, 'initialized', False):
-            print("HELLO WORLD")
+            
+            print("HELLO WORLD") #der Start meines ersten "größeren" Python Projekts
+            #zuerst werden wichtige Parameter des Spieles abgefragt:
             q_request.put(('GET_BOX', id))
             q_request.put(('GET_SIZE', id))
             q_request.put(('SET_NAME', 'Bauermeister', secret, id))
             
+            #dann einige Variablen/Eigenschaften/Listen/Dicsionaries erzeugt
             worker_Bauermeister.Pucks = {}
             worker_Bauermeister.mirror_Pucks = {}
 #            worker_Bauermeister.preliminary_solutions_list = []
@@ -857,7 +1154,7 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
             worker_Bauermeister.range = 4
             worker_Bauermeister.safety_margin = 1
             worker_Bauermeister.barriers = None
-            
+            #falls etwas schief geht gehe ich von folgenden werten aus: 
             worker_Bauermeister.X_MIN = 0 
             worker_Bauermeister.X_MAX = 120 
             worker_Bauermeister.Y_MIN = 0
@@ -865,7 +1162,8 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
             
             worker_Bauermeister.V_MAX = 42
             worker_Bauermeister.V_MIN = 10
-            worker_Bauermeister.A_MAX = 100
+            worker_Bauermeister.A_MAX = 100#
+            #anganfangs hatte ich hier eine kurze sleep phase um auf antwort zu warten, es hat aber auch ohne funktionert
             try:
                 while True:
                     reply = q_reply.get()
@@ -887,12 +1185,12 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
                         case _:
                             continue
 
-                    if worker_Bauermeister.box is not None and worker_Bauermeister.n_workers is not None:
+                    if worker_Bauermeister.box is not None and worker_Bauermeister.n_workers is not None: # wenn erfolgreich, aus dem loop aussteigen
                         break
-            except queue.Empty:
+            except queue.Empty: # wenn keine Antwort erhalten wurde, wird es erneut versucht bis der worker initialisiert ist
                 worker_Bauermeister.initialized = False
                 break
-
+            # mit bekannter Puck anzahl werden nun alle Pucks erstmalig abgefragt
             for n in range(worker_Bauermeister.n_workers):
                 q_request.put(('GET_PUCK', n, id))
                 
@@ -909,9 +1207,9 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
         
     while True:
        
-        print("known alive Pucks:", len(worker_Bauermeister.Pucks) )
+       # print("known alive Pucks:", len(worker_Bauermeister.Pucks) )
         #print("Start of Main Loop")
-        start_time = time.time()
+        start_time = time.time() #Zeitstempel für performance berechnungen und entscheidungen ob später genug Zeit für ausführliche routinen ist oder nicht
         print("CYCLES:", worker_Bauermeister.cycle_count)
         print(" ----> PROXY IDS:", worker_Bauermeister.proximity_list, "<----")
         #for puck_id in worker_Bauermeister.proximity_list:
@@ -921,7 +1219,7 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
         
         # PUCKS REQUESTEN
         
-        
+        #zunächst werden alle Pucks abgefragt um aktuelle Daten zu haben. Das geht schneller als ich dachte, anfangs hatte ich das nur für jeden 10. cycle geplant.
         if worker_Bauermeister.cycle_count % 2 == 0 or not worker_Bauermeister.proximity_list:
             for puck_id, puck_data in worker_Bauermeister.Pucks.items():
                 if puck_data['alive']:
@@ -953,8 +1251,8 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
                         case ('SET_ACCELERATION', a):
                             if a is not None:
                                 ax, ay = a  #deleten später
-                                if ax**2 + ay**2 > 0: 
-                                    print(a,">>>>>>>>>>>>>>>ACC COMMAND RECIEVED<<<<<<<<<<<<<<<<")
+                                if ax**2 + ay**2 > 0.001: 
+                                    print(a,">>>>>>>>>>>>>>>ACC COMMAND RECIEVED<<<<<<<<<<<<<<<<") # zur Kontrolle ob ausgewichen wurde, kleine Lösungen kommen warscheinlich vom Moderator
                         case ('GET_BOX', box):
                             worker_Bauermeister.box = box
                         case ('GET_SIZE', n_workers):
@@ -962,7 +1260,7 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
                             
             except queue.Empty:
                 break 
-        if not worker_Bauermeister.Pucks[worker_Bauermeister.id]['alive']:
+        if not worker_Bauermeister.Pucks[worker_Bauermeister.id]['alive']: #um nach Kollision das log besser lesen zu können und abstürze zu vermeiden
             break
         # create mirror pucks
         create_mirror_pucks(worker_Bauermeister.Pucks)        
@@ -971,7 +1269,7 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
         #PROXY CHECK
         
         
-        if worker_Bauermeister.cycle_count % 2 == 0:
+        if worker_Bauermeister.cycle_count % 2 == 0: # um rechenzeit zu sparen nur jedes zweite mal
             worker_Bauermeister.proximity_list= []
             worker_Bauermeister.quick_solution_list = []
             
@@ -979,8 +1277,9 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
             for puck_id, puck_data in worker_Bauermeister.Pucks.items():
                 
                 is_proximity(puck_id, worker_Bauermeister.id, worker_Bauermeister.Pucks)
-            
-            very_very_large_time = 100
+                
+            # ab hier wird die notwendigkeit einer der bounce überprüfung gecheckt, nämlich genau dann, wenn sich eine( oder mehr) Wand in meinem Horizont befindet
+            very_very_large_time = 100 
 
             pos_x, pos_y = worker_Bauermeister.Pucks[id]['position']
             vel_x, vel_y = worker_Bauermeister.Pucks[id]['velocity']
@@ -995,7 +1294,7 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
             time_to_floor = distance_to_floor / abs(vel_y) if vel_y < 0 else very_very_large_time
             time_to_ceiling = distance_to_ceiling / abs(vel_y) if vel_y > 0 else very_very_large_time
             
-            worker_Bauermeister.left_danger = False
+            worker_Bauermeister.left_danger = False # innerhalb der is_proximity routine werden diese Flags korrekt gesetzt
             worker_Bauermeister.right_danger = False
             worker_Bauermeister.ceiling_danger = False
             worker_Bauermeister.floor_danger = False
@@ -1020,7 +1319,7 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
 
         # CALL RESOLUTION ON NORMAL PUCKS
         
-        
+        # hier beginnt die eigentliche Ausweichberechnung
         if id in worker_Bauermeister.Pucks:
 #            print("OWN ID FOUND!")
             resolution_vector_functions, limitation_tuples = conflict_resolutions_and_limitations(worker_Bauermeister.Pucks[id], worker_Bauermeister.Pucks)
@@ -1030,10 +1329,10 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
 #            print(f"OWN ID {id} NOT IN DICTIONARY!!!")
        
         #CALL RESLOUTION ON MIRROR PUCKS
-        if worker_Bauermeister.left_danger:
+        if worker_Bauermeister.left_danger: # hier erfolgt die erzeugung der Ausweichempfehlungen für die jeweiligen gespiegelten Pucks
             left_resolution_vector_functions, left_limitation_tuples = conflict_resolutions_and_limitations(worker_Bauermeister.mirror_Pucks[100], worker_Bauermeister.Pucks)
             for function in left_resolution_vector_functions:
-                mirrored_function = mirror_of_function(function, 'x_min')
+                mirrored_function = mirror_of_function(function, 'x_min')  #und die Rückspiegelung der Vektorfunktionen 
                 resolution_vector_functions.append(mirrored_function)
     
    
@@ -1081,34 +1380,34 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
                 limitation_tuples.append(mirrored_tuple)
 
 
-        if resolution_vector_functions is None: 
+        if resolution_vector_functions is None: #um Fehlermeldungen zu vermeiden
             resolution_vector_functions = []
         if limitation_tuples is None:
             limitation_tuples = []
         #print("TIME after RESOLUTIONS", round(((time.time() - start_time) / 0.02), 2))   
         if not resolution_vector_functions:
             #print("no avoidance necessary")
-            final_result = np.array([0, 0])
-        else:
+            final_result = np.array([0, 0]) #ich gebe (0,0) zurück (und nicht "None" damit ich eine möglicherweise vorher erteiltes Ausweichkommando überschreibe
+        else: # hier beginnt die verarbeitung der Funktionen
             preliminary_solutions_list = linear_combiner(id, resolution_vector_functions)
             
             if preliminary_solutions_list is None or len(preliminary_solutions_list) == 0:
                 preliminary_solutions_list = [np.array([0, 0])]  
             timecheck = time.time() - start_time
-            
+            # hier wird je nach verbleibender Zeit geprüft ob es sekundäre Kollisionen gibt
             if len(limitation_tuples) > 0 and len(preliminary_solutions_list) > 0:
                 if timecheck < 0.01:
                     secondary_collision_checked_list = secondary_collision_protection(preliminary_solutions_list, limitation_tuples)
                     final_result = secondary_collision_checked_list
                 elif timecheck < 0.017:
-                    final_result = quick_secondary_colision_protection(preliminary_solutions_list, limitation_tuples)
+                    final_result = quick_secondary_collision_protection(preliminary_solutions_list, limitation_tuples)
                 else:
-                    final_result = preliminary_solutions_list[0]
+                    final_result = preliminary_solutions_list[0] #im zeitkritischsten Fall wird einfach der erstbeste Vektor verwendet
             else:
                 final_result = preliminary_solutions_list[0]
 
-
-        if len(limitation_tuples)==0 and len(worker_Bauermeister.proximity_list ) <=1:
+        #sollte kein Ausweichen nötig sein und maximal ein Puck in der Nähe wird die geschwindigkeit angepasst
+        if len(limitation_tuples)==0 and len(worker_Bauermeister.proximity_list ) <=1: 
            #print("MODERATOR CALLED")
            final_result = moderator()
             
@@ -1119,15 +1418,16 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
          
         #print("TIME after COMPLETE AVOIDANCE",  round(((time.time() - start_time) / 0.02), 2), "<--")
         
+        #im Anschlluss wird die geschwindigkeit der Berehcnung geprüft und ggf angepasst, in dem sich der Horizont verändert:
         elapsed_time = time.time() - start_time
         adaptive_performance_control(elapsed_time)
         elapsed_time2 = time.time() - start_time
-        if elapsed_time2 < 0.0016:
+        if elapsed_time2 < 0.0016: # auf meinem Rehcner benötigt der q_spamer 0.02 bis 0.03 Sekunden, daher dieses zeitlimit
             Q_data = Q_spamer_preparation()
             if Q_data is not None:
                 new_target_velocity, target_puck_id = Q_data 
                 #print("QSPAM:", new_target_velocity, target_puck_id)
-                start_spam = time.time()
+                #start_spam = time.time()
                 for s in range(worker_Bauermeister.Q_counter, worker_Bauermeister.Q_counter +10):
                     q_request.put(('SET_ACCELERATION',   new_target_velocity , s,target_puck_id))
                 worker_Bauermeister.Q_counter = worker_Bauermeister.Q_counter +10
@@ -1139,6 +1439,7 @@ def worker_Bauermeister(id, secret, q_request, q_reply):
         
         elapsed_time3 = time.time() - start_time
         sleep_time = max(0, 0.02 - elapsed_time3)
-        time.sleep(sleep_time)
+        time.sleep(sleep_time) 
+        # hier wird der rythmus an den serverrythmus synchronisiert um nicht in die erste Zeit eines neuen Ticks zu geraten und eine bereits vorhandenes Kommando neu zu berehcnen und dann veraltete Daten zu senden.
 
         worker_Bauermeister.cycle_count += 1
