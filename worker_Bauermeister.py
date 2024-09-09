@@ -508,11 +508,11 @@ def conflict_resolutions_and_limitations(own_puck, pucks):
         
         elif alpha_0_criterion <= 0:
             #print("out of track0 for Puck", puck_id)
-            limitation_tuples.append((max_limitation_function( relative_velocity, A_0, B ), min_limitation_function( relative_velocity, A_1) ) ) 
+            limitation_tuples.append((max_limitation_function( relative_velocity/4, A_0-3.6*relative_velocity, B ), min_limitation_function( relative_velocity, A_1) ) ) 
             
         elif alpha_1_criterion <=0:
             #print("out of track1 for Puck", puck_id)
-            limitation_tuples.append( (max_limitation_function( relative_velocity, A_1, B ), min_limitation_function( relative_velocity, A_0) ))
+            limitation_tuples.append( (max_limitation_function( relative_velocity/4, A_1-3.6*relative_velocity, B ), min_limitation_function( relative_velocity, A_0) ))
             
         else:
             print("Unexpected case, problem puck:", puck_id)
